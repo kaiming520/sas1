@@ -1,0 +1,181 @@
+###5第五章sas与表格展示
+libname sas4 "f:/03软件学习/sasproc/04第四章数据集";
+proc format;
+value bdfmt 0="偏瘦" 1="正常" 2="偏胖" 3="肥胖" 4="重度肥胖";
+run;
+data bmi;
+set sas4.fbg;
+bmi=weight/(height/100)**2;
+if bmi<18.5 then bd=0;
+else if bmi<24 then bd=1;
+else if bmi<27 then bd=2;
+else if bmi<30 then bd=3;
+else bd=4;
+format bd bdfmt.;
+proc print data=bmi;
+run; 
+
+/*表格制作*/
+proc tabulate data=bmi;
+class gender age bd;/*分类变量*/
+table gender*age,bd*(n rowpctn)/nocellmerge;
+/*交叉：* 列联表：，并列：空格*//*nocellmerge取消单元格合并*/
+label gender="性别" age="年龄" bd="体型";/*为变量添加标签*/
+keylabel n="例数" rowpctn="百分比";/*为关键词加标签*/
+run;
+/*不显示变量名*/
+proc tabulate data=bmi;
+class gender age bd;
+table gender=""*age="",bd*(n rowpctn)/box="性别 年龄";
+/*gender=""和age=""不显示变量名 box=""左上角显示为*/
+keylabel n="例数" rowpctn="百分比";
+run;
+/*修改缺失值的显示方式*/
+proc tabulate data=bmi;
+class gender age bd;
+table gender=""*age="",bd*(n rowpctn)/
+box="性别 年龄" misstext="ND";/*将缺失值显示为ND*/
+keylabel n="例数" rowpctn="百分比";
+run;
+/*增加合计项*/
+proc tabulate data=bmi;
+class gender age bd;
+table (gender="" all)*age="",(bd all)*(n rowpctn)
+/box="性别 年龄" misstext="ND";/*all增加合计项*/
+label bd="体型" all="全部";
+keylabel n="例数" rowpctn="百分比";
+run;
+/*修改表中数据的显示形式*/
+proc format;
+picture pct low-high="000.00%";/*定义pct格式为带%，两位小数点*/
+proc tabulate data=bmi;
+class gender age bd;
+table (gender="" all)*age="",(bd all)*(n*f=5.1 rowpctn*f=pct.)/
+box="性别 年龄";/* *f="输出格式"*/
+label bd="体型";
+keylabel n="例数" rowpctn="百分比";
+run;
+
+/*生成定量资料的描述表*/
+proc tabulate data=bmi;
+class gender bd;
+var fbg;
+table (gender="" all)*bd="",fbg*(n mean median std qrange)
+        /printmiss misstext="NA"; /*增加fbg的5个统计量,显示缺失的类别*/ 
+label fbg="血糖";
+keylabel n="例数" mean="均数" median="中位数" 
+         std="标准差" qrange="四分位数间距";
+run;
+
+/*制作描述多变量的统计表*/
+proc tabulate data=bmi;
+class age bd gender;/*分类变量*/
+var height weight bmi fbg;/*分析变量*/
+table (height weight bmi fbg)*(n mean std) (age bd)*(n colpctn),gender/
+                             nocellmerge misstext="--";
+label height="身高" weight="体重" bmi="BMI" fbg="血糖" 
+      age="年龄" bd="体型" gender="性别";/*设置变量标签*/
+keylabel n="例数" mean="均数" std="标准差" colpctn="百分比(%)";
+         /*设置关键词选项标签*/
+run;
+
+/*制作三线表*/
+proc tabulate data=bmi formchar=" ----------" noseps;
+class bd gender;
+var fbg;
+table fbg*(n mean std) bd*(n colpctn),gender/misstext="--";
+label bd="体型" gender="性别" fbg="血糖";
+keylabel n="例数" mean="均数" std="标准差" colpctn="百分比";
+run;
+
+proc tabulate data=bmi formchar=" ---------" noseps;
+class bd gender;
+var fbg;
+table fbg*(n mean std) bd*(n colpctn),gender/misstext="--" 
+              incent=3 rts=12; 
+label fbg="血糖" bd="体型" gender="性别";
+keylabel n="例数" mean="均数" std="标准差" colpctn="百分比";
+run;
+ 
+/*proc report用法*/
+proc report data=bmi nowd/*结果只显示在输出窗口*/
+                 headline;/*在表头下加根线*/
+column gender age fbg bmi;/*指定结果显示的四个变量*/
+define gender/width=10;/*指定gender列宽度为10*/
+define age/width=10;/*指定age列宽度为10*/
+define fbg/format=6.1;/*指定fbg输出格式为6.1*/
+define bmi/format=6.2;/*指定bmi输出格式为6.2*/
+where bmi>=27;
+run;
+
+/*分性别，年龄显示*/
+proc report data=bmi nowd headline;
+column gender age fbg bmi;
+define gender/width=10 order;/*分性别显示*/
+define age/width=10 order;/*分年龄显示*/
+define fbg/format=6.1;
+define bmi/format=6.2;
+where bmi>=27;
+run;
+/*设置行背景颜色*/
+proc report data=bmi nowd headline;
+column gender age fbg bmi;
+define gender/width=10 order;
+define age/width=10 order;
+define fbg/format=6.1 display;
+define bmi/format=6.2 display;
+compute fbg;
+if fbg>=10 then
+call define(_row_,"style", "style=[backgroundcolor=green color=yellow]");
+             /*起作用的范围是整行，背景颜色是绿色，字体颜色为黄色*/
+endcomp;
+where bmi>=27;
+run;
+
+proc report data=bmi nowd headline;
+column gender age fbg bmi;
+define gender/width=10 order;
+define age/width=10 order;
+define fbg/format=6.1 display;
+define bmi/format=6.2 display;
+compute fbg;
+if fbg>=10 then
+call define(_col_,"style", "style=[backgroundcolor=green color=yellow]");
+             /*起作用的范围是整列，背景颜色是绿色，字体颜色为黄色*/
+endcomp;
+where bmi>=27;
+run;
+
+
+/*proc repot产生新字符变量*/
+proc report data=bmi nowd headline;
+column gender age fbg bmi diagnosis;/*指定输出显示5个变量*/
+define gender/width=10 order;
+define age/width=10 order;
+define fbg/format=6.1 display;
+define bmi/format=6.2 display;
+define diagnosis/computed;
+where bmi>=27;
+compute diagnosis/char length=16;
+if fbg>=9 then diagnosis="高度怀疑糖尿病";
+else diagnosis="";/*利用if语句生成diagnosis的值*/
+endcomp;
+run;
+
+/*compute结合line生成描述性文字*/
+proc sort data=bmi;
+by gender;
+run;
+proc report data=bmi nowd headline;
+column gender age fbg bmi bmi=bmin;
+define gender/width=10 order;
+define age/width=10 order;
+define fbg/format=6.1 display;
+define bmi/format=6.2 display;
+define bmin/ noprint n;/*指定bmin为例数，并不让他显示*/
+where bmi>=27;
+by gender;/*按gender分别男和女两个表*/
+compute after;/*再表格下方添加一行文字说明，显示“bmi>=27的例数”*/
+line "bmi>=27的例数为" bmin;/*后面的bmin是bmi的统计量n*/
+endcomp;
+run;
