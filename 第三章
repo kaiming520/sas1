@@ -1,0 +1,230 @@
+###第三章
+/*数据的清洗和加工：数据合并，比较，缺失值的查询和填补，
+查找重复值和异常值，生成数据子集，产生新变量*/
+
+/*set函数进行纵向合并*/
+data ab1;
+set sasuser.a1 sasuser.b1;/*纵向合并a1&b1*/
+proc print;
+run;
+
+data ab1;
+set sasuser.a1 sasuser.b1(rename=(ht=height wt=weight)); 
+                          /*将数据集b1中的变量ht、wt重新命名*/ 
+proc print;
+run; 
+
+ data ab2;
+ set sasuser.a2(in=a) sasuser.b2(in=b);
+ proc print;
+ run; 
+
+ /*merge语句进行横向合并*/
+data ab;
+merge ab1 ab2;/*横向合并数据集ab1和ab2*/
+by id;
+drop a2 b2;
+proc print;
+run;
+
+data sasuser.xb;
+set ab;
+if id=4 then time="16jun2012"d;
+proc print;
+run;
+
+/*数据比较*/
+proc compare base=ab compare=cd nosummary transpose;
+by id;
+id id;
+run;
+
+/*查找和删除重复值*/
+/*两个数据集先进行排序*/
+proc sort data=ab1;
+by id;
+proc sort data=ab2;
+by id;
+run;
+/*然后进行横向合并合并*/
+data ab;
+merge ab1 ab2;
+by id;
+proc print;
+run;
+/*查找重复值*/
+proc sort data=ab nouniquekey out=rep;
+by name gender;/*输出重复值，指定age和gender都一样算重复*/
+proc print data=rep;
+run;
+
+proc sort data=ab nodupkey out=norep;
+by name gender;/*删除重复值，指定age和gender都一样算重复*/
+proc print data=norep;
+run;
+
+/*first.变量和last.变量*/
+data patients;
+input id gender age time yymmdd10. sbp;
+cards;
+1 1 51 2010/01/12 150
+1 1 51 2010/02/12 147
+1 1 51 2010/01/14 142
+2 2 59 2010/01/09 163
+2 2 59 2010/02/10 162
+2 2 59 2010/03/17 160
+2 2 59 2010/04/16 151
+;
+proc sort;
+by id time;/*通过id和time升序排序*/
+data patients;
+set patients;
+by id;
+retain firstsbp;
+if first.id then firstsbp=sbp;
+difsbp=sbp-firstsbp;
+if not first.id;
+proc print;
+run;
+
+/*查找缺失值  数组*/
+data missing;
+set sasuser.xb;
+array cha(1) name;
+if missing(cha(1)) then output;
+array num(10) gender age height weight time y1-y5;
+/*建立数组num(10),num(1)-num(10)分别代表10个变量*/
+do i=1 to 10;
+if missing(num(i)) then output;
+end;
+proc print;
+run;
+proc sort data=missing out=missing nodupkey;
+by id;
+proc print ;
+run;
+
+
+/*查找缺失值的万能程序*/
+data missing1;
+set sasuser.xb;
+array cha(*) _character_;
+/*数组cha(*)*号让sas自己判断数据集里有多少字符型变量*/
+do i=1 to dim(cha);
+/*dim函数指定循环次数为数组cha里面的元素geshu*/
+if missing(cha(i)) then output;
+end;
+array num(*) _numeric_;
+/*数组num(*)*号让sas自己判断数据集里有多少数值型变量*/
+do i=1 to dim(num);
+if missing(num(i)) then output;
+end;
+proc sort data=missing1 nodupkey;
+by id;
+proc print;
+run;
+
+
+/*查找异常值*/
+data outliney1;
+set sasuser.xb;
+if (y5 not in(1,2,3,4,5,.));
+proc print;
+run;
+
+data outliney2;
+set sasuser.xb;
+where (y5 not in(1,2,3,4,5,.));
+proc print;
+run;
+
+/*只能用if,不能用where的场合*/
+/*自动变量*/
+data outliney3;
+set sasuser.xb;
+if _n_=7;
+proc print;
+run;
+/*条件变量是产生的新变量*/
+data outliney4;
+set sasuser.xb;
+if age<30 then aage=1;
+          else aage=2;
+if aage=1;
+proc print;
+run;
+
+data height;;
+set sasuser.Xb;
+where (height not between 150 and 200) and (height is not missing);
+proc print;
+run;
+
+data outliney5;
+set sasuser.xb;
+proc print;
+where y5 not in(1,2,3,4,5,.);
+run;
+
+/*查找异常值的万能程序*/
+%let data=sasuser.xb;/*此处为自己的数据集*/ 
+%let id=id;/*此处为数据集中表示id号的变量*/
+%macro outline(var=,low=,high=);
+data outline;
+set &data.(keep=&id. &var.);
+length variable $20. reason $20.;
+variable="&var.";
+value=&var.;
+if &var.<&low. and not missing(&var.) then do;
+reason="过低";
+output;
+end;
+else if &var.>&high. and not missing(&var.) then do;
+reason="过高";
+output;
+end;
+drop &var.;
+proc append base=outliner1 data=outline;
+run;
+%mend outline;
+%outline(var=height,low=150,high=200);/*此处添加需要查找的变量及其正常范围*/
+%outline(var=weight,low=40,high=100);
+%outline(var=y1,low=1,high=5);
+%outline(var=y2,low=1,high=5);
+%outline(var=y3,low=1,high=5);
+%outline(var=y4,low=1,high=5);
+%outline(var=y5,low=1,high=5);
+proc print data=outliner1;
+run;
+
+
+
+/*填补缺失值*/
+/*第一步产生填补结果数据集*/
+data xb9;
+set sasuser.xb;
+if id=9 then delete;/*删除id=9这条观测*/
+run;
+proc mi data=xb9 out=nomissing round=1 1 1/*3个变量填补保留整数*/
+                 minimum=150 1 1/*3个变量分别指定最小值*/
+                maximum=200 5 5;/*3个变量分别指定最大值*/
+mcmc;/*利用蒙特卡罗默认产生5次填补结果*/
+var height y2 y4;/*填补缺失值的变量*/
+run;
+proc print data=nomissing;
+run;
+/*第二步；将填补结果数据集更新到需填补的数据集*/
+proc univariate data=nomissing noprint;
+class id;
+var height y2 y4;
+output out=nm mean=height y2 y4;
+proc print data=nm;
+run;/*这5行产生height,y2,y4的5次填补的均值，输出到数据集nm*/
+data newxb;
+update xb9 nm;/*利用update语句将数据集nm的均值更新到数据集xb9里面*/
+by id;
+height=round(height,1);/*利用round函数将3个变量保留为整数*/
+y2=round(y2,1);
+y4=round(y4,1);
+proc print data=newxb;
+run;
